@@ -1,5 +1,7 @@
 # Stock Screener - Domain-Driven Design Implementation
 
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/herrrickshaw/stock-screener-ddd/blob/main/notebooks/colab_test.ipynb)
+
 A clean, modular implementation of a stock screening system using Domain-Driven Design (DDD) principles. Separates domain logic from infrastructure concerns through bounded contexts, anti-corruption layers, and event-driven communication.
 
 ## Architecture Overview
