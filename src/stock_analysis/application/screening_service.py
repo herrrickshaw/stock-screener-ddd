@@ -93,7 +93,9 @@ class ScreeningService:
                 # Calculate partial score (how many criteria matched)
                 criteria_met = sum(
                     1 for c in screen.criteria
-                    if c.matches(stock.get_metric(c.metric_name))
+                    # a missing metric is a failed criterion, as in matches_screen()
+                    if c.metric_name in stock.metrics
+                    and c.matches(stock.get_metric(c.metric_name))
                 )
                 score = StockScore(
                     stock_ticker=stock.ticker,
