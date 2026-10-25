@@ -55,8 +55,8 @@ class MarketDataACL:
         for metric_name, value in market_data.metrics.items():
             stock.add_metric(metric_name, value)
 
-        # Set last updated
-        stock.last_updated = market_data.fetched_at
+        # Freshness follows the date the data describes, not when it was fetched
+        stock.last_updated = market_data.date
 
         return stock
 
