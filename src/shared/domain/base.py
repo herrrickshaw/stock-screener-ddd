@@ -3,7 +3,6 @@ Shared Domain Base Classes
 Foundation for all bounded contexts
 """
 
-from dataclasses import dataclass, field
 from datetime import datetime
 from abc import ABC, abstractmethod
 from typing import Any, List
