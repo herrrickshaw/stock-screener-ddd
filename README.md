@@ -1,206 +1,100 @@
-# Stock Screener - Domain-Driven Design Implementation
+# Stock Screener (Domain-Driven Design reference implementation)
 
-<!-- how-to-use-with-ai -->
-> **New here?** See [How to use this repo with AI (Claude, Gemini, ChatGPT)](HOW_TO_USE_WITH_AI.md) — clone it, paste it into an AI tool, and ask in plain English.
+A small, dependency-free Python reference implementation of a stock-screening system built with
+Domain-Driven Design: bounded contexts, value objects, aggregate roots, an anti-corruption layer
+and an in-process event bus. Given market data (OHLC plus metrics such as PE and ROE) it evaluates
+a `Screen` made of `Criterion` rules and returns matched stocks, per-stock scores and domain events.
+It ships with in-memory repositories only; there is no live data feed.
 
+> Status: research and education only; not investment advice. Phases 1-2 (Market Data, Stock
+> Analysis) are implemented; Phases 3-6 are empty package skeletons.
+
+## What it does
+- Models market data (`Ticker`, `Price`, `OHLC`, `MarketData`, `MarketCalendar`) with self-validating value objects.
+- Models screening (`Criterion`, `Screen`, `Stock` aggregate, `StockScore`); operators `<  >  ==  <=  >=`.
+- Translates Market Data aggregates into Stock Analysis aggregates through an anti-corruption layer.
+- Runs a screen via `ScreeningService`: scores every stock (100 if all criteria pass, else % met), saves it and publishes `ScreeningCompleted` / `StockScored` events.
+- Provides in-memory repositories and a synchronous event bus (handler failures are logged and isolated).
+
+## Quick start
+```bash
+git clone https://github.com/herrrickshaw/stock-screener-ddd.git
+cd stock-screener-ddd
+python -m venv .venv && source .venv/bin/activate
+pip install -r requirements-ddd.txt      # dev tools only; runtime is stdlib
+python -m pytest -q
+```
+
+```python
+from datetime import datetime, timedelta
+from decimal import Decimal
+
+from src.market_data.domain.models import OHLC, MarketData, Ticker
+from src.market_data.domain.repositories import MarketDataRepositoryMemory
+from src.shared.infrastructure.event_bus import EventBus
+from src.stock_analysis.application.screening_service import ScreeningService
+from src.stock_analysis.domain.models import Criterion, Screen
+from src.stock_analysis.domain.repositories import StockRepositoryMemory
+
+md_repo = MarketDataRepositoryMemory()
+ohlc = OHLC(Decimal("100"), Decimal("105"), Decimal("95"), Decimal("100"), 1000)
+md_repo.save(MarketData(Ticker("INFY", "NSE"), datetime.now() - timedelta(days=1), ohlc,
+                        {"PE": Decimal("18"), "ROE": Decimal("25")}))
+
+screen = Screen("Quality", "Low PE, high ROE",
+                [Criterion("PE", "<", Decimal("20")), Criterion("ROE", ">", Decimal("15"))])
+result = ScreeningService(StockRepositoryMemory(), md_repo, EventBus()).run_screen(screen)
+print(result)   # ScreeningResult(Quality: 1/1)
+```
+
+## How it works
+| Stage | Module | Output |
+|---|---|---|
+| Market data capture | `src/market_data/domain/models.py` | `MarketData` aggregate (OHLC + metrics) |
+| Persistence port | `src/market_data/domain/repositories.py` | `MarketDataRepository` + in-memory impl |
+| Translation (ACL) | `src/stock_analysis/infrastructure/market_data_acl.py` | `Stock` aggregate with numeric metrics |
+| Screening rules | `src/stock_analysis/domain/models.py` | `Criterion` / `Screen` / `Stock.matches_screen` |
+| Orchestration | `src/stock_analysis/application/screening_service.py` | `ScreeningResult`, scores |
+| Events | `src/shared/domain/events.py`, `src/shared/infrastructure/event_bus.py` | `ScreeningCompleted`, `StockScored` |
+
+Design notes: business rules live in the aggregates (`Stock.matches_screen`), not in the service;
+a metric that is absent fails a criterion rather than being read as zero; exchanges are validated
+against an explicit allowlist (`NSE, BSE, NASDAQ, NYSE, EURONEXT, TSE`) in `Ticker`. See
+[ARCHITECTURE.md](ARCHITECTURE.md) for the full context map and
+[IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md) for phase history.
+
+## Repository layout
+| Path | Purpose |
+|---|---|
+| `src/shared/` | Base classes (`AggregateRoot`, `ValueObject`, `Repository`), domain events, event bus |
+| `src/market_data/` | Context 1: market data models and repository port |
+| `src/stock_analysis/` | Context 2: screening domain, ACL, application service |
+| `src/portfolio_strategy/`, `backtesting/`, `risk_signals/`, `reporting/` | Phases 3-6: empty skeletons |
+| `tests/` | `unit/` and `integration/` pytest suites (offline) |
+| `notebooks/colab_test.ipynb` | Colab smoke notebook (see [HOW_TO_USE_WITH_AI.md](HOW_TO_USE_WITH_AI.md)) |
 
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/herrrickshaw/stock-screener-ddd/blob/main/notebooks/colab_test.ipynb)
 
-A clean, modular implementation of a stock screening system using Domain-Driven Design (DDD) principles. Separates domain logic from infrastructure concerns through bounded contexts, anti-corruption layers, and event-driven communication.
+## Configuration
+None. No environment variables, credentials or network access are used.
 
-## Architecture Overview
-
-### Bounded Contexts
-
-1. **Market Data Context** — Raw OHLC and calculated metrics
-2. **Stock Analysis Context** — Screening logic and stock evaluation
-3. **Portfolio Strategy** (Phase 3) — Position sizing and rebalancing
-4. **Backtesting** (Phase 4) — Historical performance simulation
-5. **Risk & Signals** (Phase 5) — Risk monitoring and trading signals
-6. **Reporting** (Phase 6) — Results and notifications
-
-### Key Principles
-
-- **Domain-Driven Design**: Business logic lives in domain models, not services
-- **Bounded Contexts**: Clear separation of concerns with explicit boundaries
-- **Anti-Corruption Layers**: Translate between external formats and domain concepts
-- **Value Objects**: Immutable, self-validating domain primitives (Price, Ticker, Criterion)
-- **Aggregate Roots**: Consistency boundaries (MarketData, Stock)
-- **Domain Events**: Publish-subscribe for decoupled inter-context communication
-- **Repository Pattern**: Abstraction between domain and persistence
-
-## Project Structure
-
-```
-stock-screener-ddd/
-├── src/
-│   ├── shared/                          # Shared infrastructure
-│   │   ├── domain/
-│   │   │   ├── base.py                 # AggregateRoot, ValueObject, Repository
-│   │   │   └── events.py               # All domain events
-│   │   └── infrastructure/
-│   │       └── event_bus.py            # In-process event publishing
-│   ├── market_data/                     # Context 1: Market Data
-│   │   ├── domain/
-│   │   │   ├── models.py               # Ticker, Price, OHLC, MarketData
-│   │   │   └── repositories.py         # MarketDataRepository
-│   │   └── infrastructure/
-│   │       └── ...                     # Future: DB, API adapters
-│   └── stock_analysis/                  # Context 2: Stock Analysis
-│       ├── domain/
-│       │   ├── models.py               # Criterion, Screen, Stock
-│       │   └── repositories.py         # StockRepository
-│       ├── infrastructure/
-│       │   └── market_data_acl.py      # Anti-Corruption Layer
-│       └── application/
-│           └── screening_service.py    # Orchestration layer
-└── tests/
-    ├── unit/
-    │   └── market_data/
-    │       └── test_models.py          # 19 unit tests ✓
-    └── integration/
-        └── test_stock_analysis_integration.py  # 10 integration tests ✓
-```
-
-## Phase Completion Status
-
-### Phase 1: Market Data Context ✓ (Complete)
-- Domain models: Ticker, Price, OHLC, Metric, MarketData
-- Repository pattern with in-memory implementation
-- 19 unit tests passing
-
-### Phase 2: Stock Analysis Context ✓ (Complete)
-- Domain models: Criterion, Screen, Stock aggregate, StockScore
-- Anti-Corruption Layer translating Market Data → domain objects
-- Application Service orchestrating screening operations
-- Domain events publishing (ScreeningCompleted, StockScored)
-- 10 integration tests passing
-
-### Phase 3: Portfolio Strategy Context (Planned)
-- Position sizing and rebalancing logic
-- Portfolio aggregate and allocation decisions
-- Integration with screening results
-
-### Phase 4: Backtesting Context (Planned)
-- Historical data simulation
-- Performance metrics calculation
-- Walk-forward testing
-
-### Phase 5: Risk & Signals Context (Planned)
-- Risk threshold monitoring
-- Trading signal generation (buy/sell)
-- Correlation and drawdown tracking
-
-### Phase 6: Reporting Context (Planned)
-- Daily/weekly/monthly reports
-- Multi-channel notifications
-- Performance dashboards
-
-## Running Tests
-
+## Testing
 ```bash
-# All tests
-python3 -m pytest tests/ -v
-
-# Phase 1: Market Data unit tests
-python3 -m pytest tests/unit/market_data/test_models.py -v
-
-# Phase 2: Stock Analysis integration tests
-python3 -m pytest tests/integration/test_stock_analysis_integration.py -v
-
-# With coverage
-python3 -m pytest tests/ --cov=src --cov-report=html
+python -m pytest -q          # 48 tests, offline
+ruff check src tests
 ```
+CI (`.github/workflows/ci.yml`) runs lint and tests on Python 3.9 and 3.12.
 
-## Key Design Patterns
-
-### Anti-Corruption Layer (ACL)
-Isolates domain logic from external format changes:
-```python
-# Market Data uses Price value objects
-market_data.ohlc.close_price  # → Price(Decimal("1520.00"), "INR")
-
-# Stock Analysis works with raw Decimal metrics
-stock.get_metric("Close")     # → Decimal("1520.00")
-
-# ACL handles translation
-stock = acl.stock_from_market_data(market_data)  # Translates transparently
-```
-
-### Domain Events
-Publish-subscribe for zero-coupling communication:
-```python
-# Stock Analysis publishes when screening completes
-event_bus.publish(ScreeningCompleted(
-    screen_name="Low PE",
-    stocks_matched=["INFY", "TCS"],
-    total_evaluated=100
-))
-
-# Other contexts subscribe and react (Reporting, Backtesting, etc.)
-```
-
-### Repository Pattern
-Abstraction layer between domain and persistence:
-```python
-# Domain doesn't know about storage
-class StockRepository(ABC):
-    def save(self, stock: Stock) -> None: ...
-    def find_by_ticker(self, ticker: str, exchange: str) -> Stock: ...
-
-# Implementations can switch (Memory → DB → API)
-stock_repo = StockRepositoryMemory()  # Testing
-stock_repo = StockRepositoryPostgres()  # Production
-```
-
-## Dependencies
-
-- Python 3.9+
-- pytest 7.0+ (testing)
-- dataclasses (standard library)
-- decimal (standard library)
-
-## Getting Started
-
-```bash
-# Clone and setup
-git clone <repo-url>
-cd stock-screener-ddd
-
-# Install dependencies
-pip install -r requirements-ddd.txt
-
-# Run tests to verify
-python3 -m pytest tests/ -v
-
-# Run screening
-python3 -c "
-from src.stock_analysis.application.screening_service import ScreeningService
-from src.stock_analysis.domain.models import Criterion, Screen
-from decimal import Decimal
-
-# Create screening logic here
-"
-```
-
-## Next Steps
-
-1. **Phase 3**: Implement Portfolio Strategy context with position sizing
-2. **Persistence**: Add PostgreSQL repository implementations
-3. **Data Sources**: Integrate yfinance/nsepython for market data
-4. **Performance**: Add caching layer for frequently accessed data
-5. **Monitoring**: Integrate logging and metrics for production use
-
-## Contributing
-
-This is a reference implementation of DDD principles for stock screening. Key contributions:
-- New bounded contexts following the same pattern
-- Persistence layer implementations (PostgreSQL, MongoDB, etc.)
-- Production event bus (RabbitMQ, Kafka)
-- REST API layer for external consumption
+## Limitations and known issues
+- In-memory repositories only; no PostgreSQL, API or market-data adapters yet.
+- `StockRepository.find_by_id` and `MarketDataRepositoryMemory.find_by_id` raise `NotImplementedError` (the base `Repository` contract does not fit ticker/date keys).
+- `StockScored` events are published only for stocks that pass every criterion, and carry empty `criteria_met` / `criteria_failed` lists.
+- The event bus is synchronous and in-process; swap for a broker in production.
+- Phases 3-6 are not implemented.
 
 ## References
+- Evans, E. (2003). *Domain-Driven Design: Tackling Complexity in the Heart of Software*.
+- Özkan, B., et al. (2025). *Domain-Driven Design: A Systematic Literature Review*.
 
-- Evans, E. (2003). *Domain-Driven Design: Tackling Complexity in the Heart of Software*
-- Özkan, B., et al. (2025). *Domain-Driven Design: A Systematic Literature Review*
-- Pattern: Repository, Aggregate, Value Object, Bounded Context
+## Licence
+No licence file yet — all rights reserved.
