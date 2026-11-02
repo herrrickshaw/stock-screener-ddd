@@ -5,12 +5,11 @@ Simple in-process implementation (production would use message broker)
 
 from __future__ import annotations
 
-from typing import Callable, Dict, List, Optional, Type
-from collections import defaultdict
 import logging
+from collections import defaultdict
+from typing import Callable, Dict, List, Optional, Type
 
 from src.shared.domain.base import DomainEvent
-
 
 logger = logging.getLogger(__name__)
 

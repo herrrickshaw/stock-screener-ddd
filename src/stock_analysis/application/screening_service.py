@@ -8,13 +8,12 @@ from __future__ import annotations
 import logging
 from typing import List, Optional
 
-from src.stock_analysis.domain.models import Stock, Screen, StockScore
+from src.market_data.domain.repositories import MarketDataRepository
+from src.shared.domain.events import ScreeningCompleted, StockScored
+from src.shared.infrastructure.event_bus import EventBus
+from src.stock_analysis.domain.models import Screen, Stock, StockScore
 from src.stock_analysis.domain.repositories import StockRepository
 from src.stock_analysis.infrastructure.market_data_acl import MarketDataACL
-from src.shared.infrastructure.event_bus import EventBus
-from src.shared.domain.events import ScreeningCompleted, StockScored
-from src.market_data.domain.repositories import MarketDataRepository
-
 
 logger = logging.getLogger(__name__)
 

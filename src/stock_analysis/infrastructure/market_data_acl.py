@@ -11,8 +11,8 @@ from __future__ import annotations
 from decimal import Decimal
 from typing import Dict, Union
 
-from src.stock_analysis.domain.models import Stock
 from src.market_data.domain.models import MarketData, Price
+from src.stock_analysis.domain.models import Stock
 
 
 def _raw_value(price: Union[Price, Decimal]) -> Decimal:

@@ -3,8 +3,8 @@ Shared Domain Base Classes
 Foundation for all bounded contexts
 """
 
-from datetime import datetime
 from abc import ABC, abstractmethod
+from datetime import datetime
 from typing import Any, List
 from uuid import uuid4
 

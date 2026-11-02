@@ -11,7 +11,7 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Callable, Dict, List, Optional
 
-from src.shared.domain.base import ValueObject, AggregateRoot, DomainException
+from src.shared.domain.base import AggregateRoot, DomainException, ValueObject
 
 
 class ScreeningException(DomainException):

@@ -4,10 +4,11 @@ Abstracts persistence details from domain logic
 """
 
 from abc import abstractmethod
-from typing import List, Optional
 from datetime import datetime
+from typing import List, Optional
 
 from src.shared.domain.base import Repository
+
 from .models import MarketData, Ticker
 
 
