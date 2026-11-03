@@ -6,11 +6,18 @@ This layer isolates domain logic from external system changes.
 If Market Data format changes, ONLY this file changes.
 """
 
-from decimal import Decimal
-from typing import Dict, Any
+from __future__ import annotations
 
+from decimal import Decimal
+from typing import Dict, Union
+
+from src.market_data.domain.models import MarketData, Price
 from src.stock_analysis.domain.models import Stock
-from src.market_data.domain.models import MarketData, Ticker, Price
+
+
+def _raw_value(price: Union[Price, Decimal]) -> Decimal:
+    """Unwrap a Price value object to its Decimal; pass plain Decimals through."""
+    return price.value if isinstance(price, Price) else price
 
 
 class MarketDataACL:
@@ -40,15 +47,11 @@ class MarketDataACL:
         )
 
         # Add OHLC data as metrics (extract value from Price objects)
-        open_val = market_data.ohlc.open_price.value if isinstance(market_data.ohlc.open_price, Price) else market_data.ohlc.open_price
-        high_val = market_data.ohlc.high_price.value if isinstance(market_data.ohlc.high_price, Price) else market_data.ohlc.high_price
-        low_val = market_data.ohlc.low_price.value if isinstance(market_data.ohlc.low_price, Price) else market_data.ohlc.low_price
-        close_val = market_data.ohlc.close_price.value if isinstance(market_data.ohlc.close_price, Price) else market_data.ohlc.close_price
-
-        stock.add_metric("Open", open_val)
-        stock.add_metric("High", high_val)
-        stock.add_metric("Low", low_val)
-        stock.add_metric("Close", close_val)
+        ohlc = market_data.ohlc
+        stock.add_metric("Open", _raw_value(ohlc.open_price))
+        stock.add_metric("High", _raw_value(ohlc.high_price))
+        stock.add_metric("Low", _raw_value(ohlc.low_price))
+        stock.add_metric("Close", _raw_value(ohlc.close_price))
         stock.add_metric("Volume", Decimal(market_data.ohlc.volume))
 
         # Add calculated metrics

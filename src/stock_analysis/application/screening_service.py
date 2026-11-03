@@ -3,16 +3,17 @@ Stock Analysis Context - Application Service
 Orchestrates domain logic and publishes events
 """
 
-from typing import List
-import logging
+from __future__ import annotations
 
-from src.stock_analysis.domain.models import Stock, Screen, StockScore
+import logging
+from typing import List, Optional
+
+from src.market_data.domain.repositories import MarketDataRepository
+from src.shared.domain.events import ScreeningCompleted, StockScored
+from src.shared.infrastructure.event_bus import EventBus
+from src.stock_analysis.domain.models import Screen, Stock, StockScore
 from src.stock_analysis.domain.repositories import StockRepository
 from src.stock_analysis.infrastructure.market_data_acl import MarketDataACL
-from src.shared.infrastructure.event_bus import EventBus
-from src.shared.domain.events import ScreeningCompleted, StockScored
-from src.market_data.domain.repositories import MarketDataRepository
-
 
 logger = logging.getLogger(__name__)
 
@@ -32,12 +33,13 @@ class ScreeningService:
         self,
         stock_repo: StockRepository,
         market_data_repo: MarketDataRepository,
-        event_bus: EventBus
+        event_bus: EventBus,
+        acl: Optional[MarketDataACL] = None,
     ):
         self.stock_repo = stock_repo
         self.market_data_repo = market_data_repo
         self.event_bus = event_bus
-        self.acl = MarketDataACL()
+        self.acl = acl if acl is not None else MarketDataACL()
 
     def load_stocks_from_market_data(self) -> List[Stock]:
         """
@@ -52,10 +54,30 @@ class ScreeningService:
             stock = self.acl.stock_from_market_data(market_data)
             stocks.append(stock)
 
-        logger.info(f"Loaded {len(stocks)} stocks from market data")
+        logger.info("Loaded %d stocks from market data", len(stocks))
         return stocks
 
-    def run_screen(self, screen: Screen) -> 'ScreeningResult':
+    @staticmethod
+    def _score_stock(stock: Stock, screen: Screen, passed: bool) -> StockScore:
+        """Score a stock against a screen: 100 if it passed, else the % of criteria met."""
+        total = len(screen.criteria)
+        if passed:
+            criteria_met = total
+            score = 100.0
+        else:
+            criteria_met = sum(
+                1 for c in screen.criteria if c.matches(stock.get_metric(c.metric_name))
+            )
+            score = (criteria_met / total) * 100
+        return StockScore(
+            stock_ticker=stock.ticker,
+            screen_name=screen.name,
+            score=score,
+            criteria_met=criteria_met,
+            total_criteria=total,
+        )
+
+    def run_screen(self, screen: Screen) -> ScreeningResult:
         """
         High-level operation: Run screening
 
@@ -66,7 +88,7 @@ class ScreeningService:
         4. Save updated aggregates
         5. Publish event
         """
-        logger.info(f"Starting screening: {screen}")
+        logger.info("Starting screening: %s", screen)
 
         # Step 1: Load aggregates
         stocks = self.load_stocks_from_market_data()
@@ -76,33 +98,11 @@ class ScreeningService:
         stock_scores = []
 
         for stock in stocks:
-            passed = stock.matches_screen(screen)  # ← DOMAIN LOGIC
+            passed = stock.matches_screen(screen)  # <- DOMAIN LOGIC
             stock.record_screening_result(screen, passed)
-
             if passed:
                 matched_stocks.append(stock)
-                score = StockScore(
-                    stock_ticker=stock.ticker,
-                    screen_name=screen.name,
-                    score=100.0,
-                    criteria_met=len(screen.criteria),
-                    total_criteria=len(screen.criteria)
-                )
-                stock_scores.append(score)
-            else:
-                # Calculate partial score (how many criteria matched)
-                criteria_met = sum(
-                    1 for c in screen.criteria
-                    if c.matches(stock.get_metric(c.metric_name))
-                )
-                score = StockScore(
-                    stock_ticker=stock.ticker,
-                    screen_name=screen.name,
-                    score=(criteria_met / len(screen.criteria)) * 100,
-                    criteria_met=criteria_met,
-                    total_criteria=len(screen.criteria)
-                )
-                stock_scores.append(score)
+            stock_scores.append(self._score_stock(stock, screen, passed))
 
         # Step 3: Save updated aggregates
         for stock in stocks:
@@ -134,7 +134,7 @@ class ScreeningService:
                     criteria_failed=[]
                 ))
 
-        logger.info(f"Screening complete: {len(matched_stocks)} matches out of {len(stocks)}")
+        logger.info("Screening complete: %d matches out of %d", len(matched_stocks), len(stocks))
         return result
 
 

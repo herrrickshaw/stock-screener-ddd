@@ -12,18 +12,14 @@ authors = [
     {name = "Uma Shankar", email = "umashankartd1991@gmail.com"}
 ]
 
-dependencies = [
-    "dataclasses>=0.6",
-]
+dependencies = []  # standard library only
 
 [project.optional-dependencies]
 dev = [
     "pytest>=7.0.0",
     "pytest-cov>=3.0.0",
     "mypy>=0.950",
-    "black>=22.0.0",
-    "flake8>=4.0.0",
-    "isort>=5.10.0",
+    "ruff>=0.4",
 ]
 
 [tool.pytest.ini_options]
@@ -46,3 +42,14 @@ python_version = "3.9"
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = false
+
+[tool.ruff]
+line-length = 100
+target-version = "py39"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B"]
+ignore = [
+    "E501",  # long lines tolerated in docstrings and tests
+    "B024",  # AggregateRoot/ValueObject are deliberate marker bases
+]

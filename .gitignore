@@ -44,3 +44,4 @@ env/
 *.db
 *.sqlite
 *.log
+.venv/

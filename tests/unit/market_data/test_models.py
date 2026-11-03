@@ -3,11 +3,12 @@ Unit Tests for Market Data Domain Models
 Tests pure domain logic in aggregates and value objects
 """
 
-import pytest
 from datetime import datetime
 from decimal import Decimal
 
-from src.market_data.domain.models import Ticker, Price, OHLC, MarketData
+import pytest
+
+from src.market_data.domain.models import OHLC, MarketData, Price, Ticker
 
 
 class TestTicker:

@@ -3,17 +3,30 @@ Stock Analysis Context - Domain Models
 Core domain for stock screening and evaluation
 """
 
+from __future__ import annotations
+
+import operator
 from dataclasses import dataclass, field
 from datetime import datetime
 from decimal import Decimal
-from typing import List, Dict
+from typing import Callable, Dict, List, Optional
 
-from src.shared.domain.base import ValueObject, AggregateRoot, DomainException
+from src.shared.domain.base import AggregateRoot, DomainException, ValueObject
 
 
 class ScreeningException(DomainException):
     """Raised when screening operation is invalid"""
     pass
+
+
+# Supported comparison operators; add a new one here without touching Criterion.
+OPERATORS: Dict[str, Callable[[Decimal, Decimal], bool]] = {
+    "<": operator.lt,
+    ">": operator.gt,
+    "==": operator.eq,
+    "<=": operator.le,
+    ">=": operator.ge,
+}
 
 
 @dataclass(frozen=True)
@@ -29,7 +42,7 @@ class Criterion(ValueObject):
     def __post_init__(self):
         if not self.metric_name:
             raise ValueError("Metric name required")
-        if self.operator not in ["<", ">", "==", "<=", ">="]:
+        if self.operator not in OPERATORS:
             raise ValueError(f"Unknown operator: {self.operator}")
 
     def matches(self, value: Decimal) -> bool:
@@ -37,17 +50,7 @@ class Criterion(ValueObject):
         Evaluate if value matches this criterion
         Pure business logic - no side effects
         """
-        if self.operator == "<":
-            return value < self.threshold
-        elif self.operator == ">":
-            return value > self.threshold
-        elif self.operator == "==":
-            return value == self.threshold
-        elif self.operator == "<=":
-            return value <= self.threshold
-        elif self.operator == ">=":
-            return value >= self.threshold
-        return False
+        return OPERATORS[self.operator](value, self.threshold)
 
     def __str__(self) -> str:
         return f"{self.metric_name} {self.operator} {self.threshold}"
@@ -89,7 +92,7 @@ class Stock(AggregateRoot):
     - Track screening results
     """
 
-    def __init__(self, ticker: str, exchange: str, metrics: Dict[str, Decimal] = None):
+    def __init__(self, ticker: str, exchange: str, metrics: Optional[Dict[str, Decimal]] = None):
         super().__init__()
         self.ticker = ticker
         self.exchange = exchange
@@ -125,7 +128,7 @@ class Stock(AggregateRoot):
                 return False
         return True
 
-    def record_screening_result(self, screen: Screen, passed: bool, details: Dict = None) -> None:
+    def record_screening_result(self, screen: Screen, passed: bool, details: Optional[Dict] = None) -> None:
         """Record that this stock was evaluated against a screen"""
         self.screening_results[screen.name] = {
             "passed": passed,

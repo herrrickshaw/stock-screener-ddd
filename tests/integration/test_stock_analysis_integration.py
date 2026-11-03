@@ -3,20 +3,19 @@ Integration tests: Stock Analysis context with Market Data context
 Verify ACL translation and screening orchestration
 """
 
-import pytest
 from datetime import datetime
 from decimal import Decimal
 
-from src.market_data.domain.models import (
-    Ticker, Price, OHLC, MarketData, MarketCalendar
-)
+import pytest
+
+from src.market_data.domain.models import OHLC, MarketData, Price, Ticker
 from src.market_data.domain.repositories import MarketDataRepositoryMemory
-from src.stock_analysis.domain.models import Criterion, Screen, Stock
+from src.shared.domain.events import ScreeningCompleted
+from src.shared.infrastructure.event_bus import EventBus
+from src.stock_analysis.application.screening_service import ScreeningService
+from src.stock_analysis.domain.models import Criterion, Screen
 from src.stock_analysis.domain.repositories import StockRepositoryMemory
 from src.stock_analysis.infrastructure.market_data_acl import MarketDataACL
-from src.stock_analysis.application.screening_service import ScreeningService
-from src.shared.infrastructure.event_bus import EventBus
-from src.shared.domain.events import ScreeningCompleted, StockScored
 
 
 @pytest.fixture

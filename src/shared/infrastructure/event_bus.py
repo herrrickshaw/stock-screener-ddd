@@ -3,12 +3,13 @@ Event Bus - Enables communication between bounded contexts
 Simple in-process implementation (production would use message broker)
 """
 
-from typing import Callable, List, Type, Dict
-from collections import defaultdict
+from __future__ import annotations
+
 import logging
+from collections import defaultdict
+from typing import Callable, Dict, List, Optional, Type
 
 from src.shared.domain.base import DomainEvent
-
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +37,7 @@ class EventBus:
             event_bus.subscribe(ScreeningCompleted, on_screening_complete)
         """
         self.subscribers[event_type].append(handler)
-        logger.info(f"Subscribed {handler.__name__} to {event_type.__name__}")
+        logger.info("Subscribed %s to %s", handler.__name__, event_type.__name__)
 
     def publish(self, event: DomainEvent) -> None:
         """
@@ -52,22 +53,21 @@ class EventBus:
         event_type = type(event)
         self.event_history.append(event)
 
-        logger.info(f"Publishing {event_type.__name__} (ID: {event.event_id})")
+        logger.info("Publishing %s (ID: %s)", event_type.__name__, event.event_id)
 
         handlers = self.subscribers.get(event_type, [])
 
         if not handlers:
-            logger.warning(f"No subscribers for {event_type.__name__}")
+            logger.warning("No subscribers for %s", event_type.__name__)
             return
 
         for handler in handlers:
             try:
-                logger.debug(f"Calling handler: {handler.__name__}")
+                logger.debug("Calling handler: %s", handler.__name__)
                 handler(event)
             except Exception as e:
                 logger.error(
-                    f"Error in event handler {handler.__name__}: {str(e)}",
-                    exc_info=True
+                    "Error in event handler %s: %s", handler.__name__, e, exc_info=True
                 )
                 # Continue with other handlers even if one fails
                 # For critical errors, implement dead-letter queue in production
@@ -87,7 +87,7 @@ class EventBus:
 
 # Global event bus instance
 # In a real application, this would be injected via dependency container
-_event_bus: EventBus = None
+_event_bus: Optional[EventBus] = None
 
 
 def get_event_bus() -> EventBus:
