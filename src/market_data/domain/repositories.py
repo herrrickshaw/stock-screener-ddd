@@ -49,23 +49,23 @@ class MarketDataRepositoryMemory(MarketDataRepository):
     """Simple in-memory implementation for testing"""
 
     def __init__(self):
-        self.data = {}  # key: (ticker_symbol, date) -> MarketData
+        self.data = {}  # key: (symbol, exchange, date) -> MarketData
 
     def save(self, market_data: MarketData) -> None:
-        key = (market_data.ticker.symbol, market_data.date.date())
+        key = (market_data.ticker.symbol, market_data.ticker.exchange, market_data.date.date())
         self.data[key] = market_data
 
     def find_by_ticker_and_date(
         self, ticker: Ticker, date: datetime
     ) -> Optional[MarketData]:
-        key = (ticker.symbol, date.date())
+        key = (ticker.symbol, ticker.exchange, date.date())
         return self.data.get(key)
 
     def find_by_ticker(self, ticker: Ticker, days: int = 252) -> List[MarketData]:
         results = [
             data
-            for (symbol, _), data in self.data.items()
-            if symbol == ticker.symbol
+            for (symbol, exchange, _), data in self.data.items()
+            if (symbol, exchange) == (ticker.symbol, ticker.exchange)
         ]
         return sorted(results, key=lambda x: x.date, reverse=True)[:days]
 
@@ -77,6 +77,6 @@ class MarketDataRepositoryMemory(MarketDataRepository):
         raise NotImplementedError("Use find_by_ticker_and_date instead")
 
     def delete(self, ticker: Ticker, date: datetime) -> None:
-        key = (ticker.symbol, date.date())
+        key = (ticker.symbol, ticker.exchange, date.date())
         if key in self.data:
             del self.data[key]
